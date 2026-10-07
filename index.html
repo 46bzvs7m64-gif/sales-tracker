@@ -104,8 +104,8 @@ function daysAgo(n){const d=new Date();d.setDate(d.getDate()+ +n);return d.toISO
 function seed(force){
   if(!force && load().length) return;
   if(force && load().length && !confirm('覆盖当前数据并载入演示数据？')) return;
-  save(SEED.map(([name,ch,stage,amt,note,c,u])=>({
-    id:Date.now()+Math.random(),name,ch,stage,amt:+amt,note,
+  save(SEED.map(([name,ch,stage,amt,note,c,u],i)=>({
+    id:Date.now()+i,name,ch,stage,amt:+amt,note,
     created:daysAgo(c),updated:daysAgo(u)
   })));
   render();
