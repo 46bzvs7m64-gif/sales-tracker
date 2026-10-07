@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人销售业绩管理系统</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Microsoft YaHei",sans-serif;background:#f4f5f7;color:#222;padding:20px}
+  .wrap{max-width:1100px;margin:auto}
+  h1{font-size:20px;margin-bottom:4px}.sub{color:#888;font-size:12px;margin-bottom:16px}
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
+  .kpi{background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .kpi .lab{font-size:12px;color:#888;margin-bottom:6px}.kpi .val{font-size:19px;font-weight:700}
+  .grid{display:grid;grid-template-columns:1fr 1.3fr;gap:12px;margin-bottom:16px}
+  .card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .card h3{font-size:14px;margin-bottom:12px}
+  label{font-size:12px;color:#666;display:block;margin:8px 0 3px}
+  input,select{width:100%;padding:8px;border:1px solid #d5d5d5;border-radius:6px;font-size:13px}
+  button{cursor:pointer;border:none;border-radius:6px;font-size:13px;padding:9px 14px}
+  .btn-r{background:#b30000;color:#fff;width:100%;margin-top:14px}
+  .btn-o{background:#eee;color:#555;padding:6px 10px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:8px 5px;border-bottom:1px solid #f0f0f0;text-align:left}
+  th{color:#888;font-weight:400;background:#fafafa}
+  .funnel div{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12.5px}
+  .funnel .lab{width:72px}.funnel .bar{height:20px;background:#b30000;color:#fff;border-radius:4px;font-size:11px;line-height:20px;padding-left:8px;min-width:36px}
+  .s-badge{padding:2px 8px;border-radius:10px;font-size:11px;color:#fff}
+  .row-actions button{padding:3px 8px;font-size:11px;margin-left:4px}
+  .note{font-size:11px;color:#aaa;margin-top:8px}
+  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>个人销售业绩管理系统</h1>
+  <div class="sub">客户跟进 · 销售漏斗 · 转化率/客单价/成交周期分析 · 数据存本地浏览器（localStorage），双击即用</div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>录入/更新客户</h3>
+      <label>客户名称 *<input id="fName" placeholder="如：淘宝服饰客户A-王经理"></label>
+      <label>来源渠道
+        <select id="fCh"><option>抖音</option><option>小红书</option><option>百度</option><option>B站</option><option>转介绍</option><option>陌拜</option><option>其他</option></select>
+      </label>
+      <label>当前阶段
+        <select id="fStage"><option>线索</option><option>初步沟通</option><option>方案报价</option><option>商务谈判</option><option>成单</option><option>流失</option></select>
+      </label>
+      <label>预计/成交金额（元）<input id="fAmt" type="number" min="0" value="0"></label>
+      <label>备注<input id="fNote" placeholder="需求、下一步动作..."></label>
+      <button class="btn-r" onclick="addLead()">保存客户</button>
+      <p class="note">阶段推进时重新选择并保存同名客户即可更新；成交自动计入业绩。</p>
+    </div>
+
+    <div class="card">
+      <h3>销售漏斗与转化</h3>
+      <div class="funnel" id="funnel"></div>
+      <h3 style="margin-top:16px">操作</h3>
+      <p>
+        <button class="btn-o" onclick="exportCSV()">导出CSV</button>
+        <button class="btn-o" onclick="seed(true)">载入演示数据</button>
+        <button class="btn-o" onclick="clearAll()">清空全部</button>
+      </p>
+      <p class="note" id="storageInfo"></p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>客户列表</h3>
+    <table id="tbl"><thead><tr><th>客户</th><th>渠道</th><th>阶段</th><th>金额</th><th>周期</th><th>更新日</th><th>备注</th><th></th></tr></thead><tbody></tbody></table>
+  </div>
+</div>
+
+<script>
+const KEY='sales_tracker_v1';
+const STAGES=['线索','初步沟通','方案报价','商务谈判','成单','流失'];
+const COLORS=['#8b96ac','#5aa7ff','#f5a623','#b30000','#1aad4a','#c44'];
+const SEED=[
+ ['淘宝-服饰客户A 王经理','抖音','成单',12000,'春装上新投放','-42','-38'],
+ ['京东-3C客户B 李总','百度','成单',26000,'旗舰机新品排期','-35','-30'],
+ ['世纪佳缘 周经理','小红书','商务谈判',18000,'信息流框架洽谈','-28','-26'],
+ ['本地餐饮 张店长','B站','方案报价',6000,'探店+开屏组合方案','-20','-18'],
+ ['教育客户E 赵老师','百度','方案报价',9000,'考研旺季投放计划','-15','-13'],
+ ['美妆新品牌 陈总','小红书','初步沟通',0,'初次电话沟通需求','-12','-10'],
+ ['二手车平台 沈经理','抖音','初步沟通',0,'留资待回访','-9','-7'],
+ ['医美机构 何院长','转介绍','线索',0,'展会拿到名片','-5','-5'],
+ ['预制菜品牌 唐总','转介绍','成单',8000,'老客户介绍已签框','-40','-33'],
+ ['旅拍连锁 曹店长','抖音','流失',5000,'预算转给线下渠道','-25','-22'],
+ ['酒店 许经理','百度','流失',4000,'今年无线上预算','-18','-16'],
+ ['SaaS公司 董经理','B站','线索',0,'私信未回复','-3','-3'],
+ ['电商客户C 吴女士','小红书','商务谈判',15000,'合同条款审核中','-30','-28'],
+ ['茶饮加盟 刘总','抖音','初步沟通',0,'咨询加盟获客成本','-6','-4'],
+ ['健身工作室 周教练','小红书','线索',0,'评论区留资待联系','-2','-2'],
+ ['宠物医院 林院长','百度','线索',0,'搜索推广表单线索','-1','-1']
+];
+
+function today(){return new Date().toISOString().slice(0,10)}
+function load(){try{return JSON.parse(localStorage.getItem(KEY))||[]}catch(e){return[]}}
+function save(d){localStorage.setItem(KEY,JSON.stringify(d))}
+function daysAgo(n){const d=new Date();d.setDate(d.getDate()+ +n);return d.toISOString().slice(0,10)}
+
+function seed(force){
+  if(!force && load().length) return;
+  if(force && load().length && !confirm('覆盖当前数据并载入演示数据？')) return;
+  save(SEED.map(([name,ch,stage,amt,note,c,u])=>({
+    id:Date.now()+Math.random(),name,ch,stage,amt:+amt,note,
+    created:daysAgo(c),updated:daysAgo(u)
+  })));
+  render();
+}
+function clearAll(){if(confirm('确定清空全部客户数据？')){localStorage.removeItem(KEY);render()}}
+
+function addLead(){
+  const name=fName.value.trim();
+  if(!name){alert('请填写客户名称');return}
+  const d=load();
+  const exist=d.find(x=>x.name===name);
+  const now=today();
+  if(exist){exist.ch=fCh.value;exist.stage=fStage.value;exist.amt=+fAmt.value||exist.amt;exist.note=fNote.value||exist.note;exist.updated=now}
+  else{d.push({id:Date.now(),name,ch:fCh.value,stage:fStage.value,amt:+fAmt.value,note:fNote.value,created:now,updated:now})}
+  save(d);fName.value='';fAmt.value=0;fNote.value='';render();
+}
+
+function setStage(id,stage){const d=load();const x=d.find(v=>v.id===id);x.stage=stage;x.updated=today();save(d);render()}
+function del(id){if(!confirm('删除该客户？'))return;save(load().filter(x=>x.id!==id));render()}
+
+function cycleDays(x){return Math.round((new Date(x.updated)-new Date(x.created))/864e5)}
+
+function render(){
+  const d=load();
+  document.getElementById('storageInfo').textContent=`本地已存储 ${d.length} 条客户记录，仅保存在当前浏览器`;
+  const cnt=s=>d.filter(x=>x.stage===s).length;
+  const won=d.filter(x=>x.stage==='成单');
+  const wonAmt=won.reduce((a,x)=>a+x.amt,0);
+  const pipeline=d.filter(x=>!['成单','流失'].includes(x.stage)).reduce((a,x)=>a+x.amt,0);
+  const closed=won.length+d.filter(x=>x.stage==='流失').length;
+  const winRate=closed?(won.length/closed*100):0;
+  const avgDeal=won.length?wonAmt/won.length:0;
+  const avgCycle=won.length?(won.reduce((a,x)=>a+cycleDays(x),0)/won.length):0;
+
+  kpis.innerHTML=[
+    ['在途商机额','¥'+pipeline.toLocaleString()],
+    ['成交金额','¥'+wonAmt.toLocaleString()],
+    ['成交客户',won.length+' 家'],
+    ['赢单率',winRate.toFixed(0)+'%'],
+    ['平均成交周期',avgCycle.toFixed(0)+' 天']
+  ].map(([l,v])=>`<div class="kpi"><div class="lab">${l}</div><div class="val">${v}</div></div>`).join('');
+
+  const max=cnt('线索')||1;
+  funnel.innerHTML=STAGES.map((s,i)=>{
+    const n=cnt(s);
+    const base=cnt('线索')||1;
+    return `<div><span class="lab">${s}</span><div class="bar" style="width:${Math.max(10,n/base*100)}%;background:${COLORS[i]}">${n} · ${(n/(d.length||1)*100).toFixed(0)}%</div></div>`;
+  }).join('');
+
+  tbl.querySelector('tbody').innerHTML=d.slice().sort((a,b)=>b.updated.localeCompare(a.updated)).map(x=>{
+    const i=STAGES.indexOf(x.stage);
+    return `<tr><td>${x.name}</td><td>${x.ch}</td>
+    <td><select onchange="setStage(${x.id},this.value)" style="padding:3px;font-size:11px">
+    ${STAGES.map(s=>`<option ${s===x.stage?'selected':''}>${s}</option>`).join('')}</select></td>
+    <td>¥${(x.amt||0).toLocaleString()}</td><td>${cycleDays(x)}天</td><td>${x.updated}</td><td>${x.note||''}</td>
+    <td class="row-actions"><button class="btn-o" onclick="del(${x.id})">删</button></td></tr>`;
+  }).join('');
+}
+
+function exportCSV(){
+  const d=load();
+  const h=['客户','渠道','阶段','金额','创建日','更新日','周期天数','备注'];
+  const rows=d.map(x=>[x.name,x.ch,x.stage,x.amt,x.created,x.updated,cycleDays(x),x.note||''].join(','));
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['\ufeff'+[h.join(','),...rows].join('\n')],{type:'text/csv'}));
+  a.download='销售客户管理导出.csv';a.click();
+}
+
+seed(false);
+render();
+</script>
+</body>
+</html>
